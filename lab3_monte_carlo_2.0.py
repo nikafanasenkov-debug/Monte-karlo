@@ -25,6 +25,7 @@ COLORS = {'hit_or_miss': 'tab:orange', 'mean_value': 'tab:blue'}
 def sinc_unscaled(x):
     return np.sinc(np.asarray(x, dtype=float) / np.pi)
 
+
 def log_ratio(x):
     """log(1+x)/x: log1p и деление без вычисления 0/0."""
     x = np.asarray(x, dtype=float)
@@ -32,15 +33,16 @@ def log_ratio(x):
     np.divide(np.log1p(x), x, out=out, where=(x != 0))
     return out
 
+
 def tasks():
     return [
         dict(key='pi', title='Число π', f=lambda x: np.sqrt(1-x*x), scale=4., ref=math.pi, quad_err=0.),
-        # ИСПРАВЛЕНО: \; добавляет отступ после интеграла, \, добавляет отступ перед dx
         dict(key='gauss', title=r'$\underset{0}{\overset{1}{\int}}\; e^{-x^2} \, dx$', f=lambda x: np.exp(-x*x), scale=1.),
         dict(key='sinc', title=r'$\underset{0}{\overset{1}{\int}}\; \frac{\sin(x)}{x} \, dx$', f=sinc_unscaled, scale=1.),
         dict(key='log', title=r'$\underset{0}{\overset{1}{\int}}\; \frac{\ln(1+x)}{x} \, dx$', f=log_ratio, scale=1.),
         dict(key='cos', title=r'$\underset{0}{\overset{1}{\int}}\; \cos(x^2) \, dx$', f=lambda x: np.cos(x*x), scale=1.),
     ]
+
 
 def save_csv(path, rows):
     if not rows:
@@ -49,6 +51,7 @@ def save_csv(path, rows):
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+
 
 def estimate(task, method, n, rng, keep=False):
     start = perf_counter()
@@ -81,6 +84,7 @@ def estimate(task, method, n, rng, keep=False):
         result.update(x=x, y=y, observations=observations)
     return result
 
+
 def validate_implementation():
     checks = []
     def check(name, condition):
@@ -103,10 +107,12 @@ def validate_implementation():
         check('Эталонная квадратура: ' + name, abs(value-target) < 1e-11)
     return checks
 
+
 def save_figure(fig, path):
     fig.tight_layout()
     fig.savefig(path, dpi=160, bbox_inches='tight')
     plt.close(fig)
+
 
 def geometry_plot(task, result, out, n_plot):
     count = min(n_plot, len(result['x']))
@@ -133,6 +139,7 @@ def geometry_plot(task, result, out, n_plot):
     ax.legend(loc='lower left', fontsize=9)
     save_figure(fig, out / f"01_geometry_{task['key']}.png")
 
+
 def convergence_plot(task, trajectories, out):
     fig, ax = plt.subplots(figsize=(8, 5))
     for method, r in trajectories.items():
@@ -151,8 +158,8 @@ def convergence_plot(task, trajectories, out):
     ax.grid(alpha=.25)
     save_figure(fig, out / f"02_convergence_{task['key']}.png")
 
+
 def research_plot(task, rows, raw, out):
-    # Каждая диагностика сохраняется отдельно: один график на PNG-файл.
     fig_rmse, ax_rmse = plt.subplots(figsize=(8, 5))
     fig_coverage, ax_coverage = plt.subplots(figsize=(8, 5))
     fig_errors, ax_errors = plt.subplots(figsize=(8, 5))
@@ -204,21 +211,19 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     checks = validate_implementation()
     save_csv(out/'validation.csv', checks)
-    # Раздельные воспроизводимые потоки для основного и повторного экспериментов.
+    
     main_seed, research_seed = np.random.SeedSequence(args.seed).spawn(2)
     main_rng = np.random.default_rng(main_seed)
     research_rng = np.random.default_rng(research_seed)
     problem_list = tasks()
     ns = np.unique(np.geomspace(100, min(args.n, 100_000), 7).astype(int))
     summary, research, trials, conclusions = [], [], [], []
+    
     for task in problem_list:
         if 'ref' not in task:
             task['ref'], task['quad_err'] = quad(lambda x: float(task['f'](x)), 0, 1,
                                                 epsabs=1e-12, epsrel=1e-12)
-        # Теоретические дисперсии единичного наблюдения для сравнения с экспериментом.
         integral = task['ref']/task['scale']
-        # Для pi X равномерен на [-1,1], а f и f² четные:
-        # E[f(X)²] = (1/2)*integral_{-1}^{1} f(x)² dx = integral_0^1 f(x)² dx.
         second, _ = quad(lambda x: float(task['f'](x))**2, 0, 1,
                          epsabs=1e-12, epsrel=1e-12)
         variances = {'hit_or_miss': task['scale']**2*integral*(1-integral),
@@ -240,7 +245,6 @@ def main():
         for method in METHODS:
             for n in ns:
                 n = int(n)
-                # Каждый повтор и каждый N используют новый участок случайного потока.
                 reps = [estimate(task, method, n, research_rng) for _ in range(args.repeats)]
                 raw[(method,n)] = reps
                 values = np.array([r['estimate'] for r in reps])
@@ -274,19 +278,48 @@ def main():
         conclusions.append(f"{task['title']}: отношение эмпирических дисперсий HM/среднее = "
                            f"{(hm['empirical_sd']/mv['empirical_sd'])**2:.3f}; "
                            f"теоретическое отношение = {variances['hit_or_miss']/variances['mean_value']:.3f}.")
+                           
     save_csv(out/'summary.csv', summary)
     save_csv(out/'research.csv', research)
     save_csv(out/'trials.csv', trials)
     coverage_noise = math.sqrt(.95*.05/args.repeats)
+    
+    # --- ВОССТАНОВЛЕННЫЙ БЛОК ОТЧЕТА ---
+    report = [
+        '# Лабораторная работа: метод Монте-Карло',
+        '', '## Цель и постановка',
+        'Оценить π и четыре интеграла на [0,1], сравнить методы попаданий и среднего, исследовать сходимость и калибровку интервалов.',
+        f'Параметры: seed={args.seed}, N={args.n}, независимых повторов на каждое N: {args.repeats}; сетка N={ns.tolist()}.',
+        '', '## Модель и формулы',
+        'Для интегралов X и Y равномерны на [0,1]. Для попаданий Z=1{Y<=f(X)}, для среднего Z=f(X). Оценка: scale*mean(Z).',
+        'Для π X и Y равномерны на [-1,1]: полный единичный круг расположен в квадрате площади 4. Для попаданий Z=1{X²+Y²<=1}, оценка π=4*mean(Z).',
+        'Для метода среднего при оценке π используется длина вертикального сечения круга: π_hat=4*mean(sqrt(1-X²)), X равномерен на [-1,1]. Для остальных задач scale=1.',
+        'SE=scale*s(Z)/sqrt(N), выборочная дисперсия с ddof=1. Интервал: оценка ± 1.96*SE (приближенный).',
+        'RMSE=sqrt(mean((оценка−эталон)²)); bias=mean(оценка−эталон). Теоретический ориентир RMSE: C/sqrt(N).',
+        'Дисперсии: scale²*p*(1−p)/N для попаданий и scale²*(E[f(X)²]−E[f(X)]²)/N для среднего.',
+        '', '## Полученные результаты',
+    ]
     for r in summary:
         report.append(f"- {r['task']}, {LABELS[r['method']]}: {r['estimate']:.9f}; "
                       f"эталон {r['reference']:.9f}; |ошибка|={r['absolute_error']:.4g}; "
                       f"95% ДИ [{r['ci_low']:.9f}, {r['ci_high']:.9f}].")
+                      
+    report += ['', '## Исследование сходимости и эффективности', *conclusions,
+        '', '## Файлы',
+        '- summary.csv: основной расчет, ошибки, интервалы и время.',
+        '- research.csv: агрегаты независимых повторов для каждого N.',
+        '- trials.csv: исходные результаты всех повторов.',
+        '- validation.csv: детерминированные тесты.',
+        '- 01_geometry_*.png: геометрия попаданий.',
+        '- 02_convergence_*.png: траектории оценок.',
+        '- 03_rmse_*.png: RMSE; 04_coverage_*.png: покрытие; 05_errors_*.png: распределения.',
+    ]
+    
     (out/'report.md').write_text('\n'.join(report), encoding='utf-8')
     print('\n'.join(report))
     print(f'\nРезультаты: {out.resolve()}')
+    
     if args.show:
-        # Графики сначала сохранены через Agg; показываем их в доступном GUI-бэкенде.
         try:
             plt.switch_backend('TkAgg')
             for path in sorted(out.glob('*.png')):
@@ -297,6 +330,7 @@ def main():
             plt.show()
         except (ImportError, RuntimeError) as exc:
             print(f'Окна недоступны ({exc}); сохраненные PNG можно открыть вручную.')
+
 
 if __name__ == '__main__':
     main()
