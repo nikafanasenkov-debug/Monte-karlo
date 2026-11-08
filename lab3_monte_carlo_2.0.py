@@ -1,25 +1,3 @@
-﻿"""ЛР: оценка pi и интегралов методом Монте-Карло.
-
-Установка: python -m pip install numpy scipy matplotlib
-Запуск: python lab3_monte_carlo.py
-Быстрая проверка: python lab3_monte_carlo.py --quick
-Окна графиков: python lab3_monte_carlo.py --show
-Более подробный эксперимент: python lab3_monte_carlo.py --repeats 200
-
-Результаты сохраняются в каталоге results_mc (можно изменить через --out).
-Доверительные интервалы нормальные, приближенные, номинального уровня 95%.
-Для интегралов hit-or-miss используются функции со значениями в [0, 1].
-Для pi используется полный круг в квадрате [-1, 1] x [-1, 1].
-Сравнение методов проводится при одинаковом числе вычислений функции,
-но НЕ одинаковом числе случайных чисел. Измеряется также время.
-
-Методические источники:
-1. Physically Based Rendering, 4th ed., Monte Carlo Basics.
-2. University of Colorado, Lesson 6: Monte Carlo Integration.
-3. SciPy documentation: scipy.integrate.quad.
-
-Программа не содержит заранее придуманных экспериментальных результатов.
-"""
 from __future__ import annotations
 
 import argparse
@@ -33,7 +11,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-# Включаем классический научный шрифт для формул
 plt.rcParams['mathtext.fontset'] = 'cm' 
 
 from scipy.integrate import quad
@@ -46,9 +23,7 @@ COLORS = {'hit_or_miss': 'tab:orange', 'mean_value': 'tab:blue'}
 
 
 def sinc_unscaled(x):
-    """sin(x)/x с непрерывным продолжением f(0)=1."""
     return np.sinc(np.asarray(x, dtype=float) / np.pi)
-
 
 def log_ratio(x):
     """log(1+x)/x: log1p и деление без вычисления 0/0."""
@@ -56,7 +31,6 @@ def log_ratio(x):
     out = np.ones_like(x)
     np.divide(np.log1p(x), x, out=out, where=(x != 0))
     return out
-
 
 def tasks():
     return [
@@ -68,7 +42,6 @@ def tasks():
         dict(key='cos', title=r'$\underset{0}{\overset{1}{\int}}\; \cos(x^2) \, dx$', f=lambda x: np.cos(x*x), scale=1.),
     ]
 
-
 def save_csv(path, rows):
     if not rows:
         return
@@ -77,16 +50,7 @@ def save_csv(path, rows):
         writer.writeheader()
         writer.writerows(rows)
 
-
 def estimate(task, method, n, rng, keep=False):
-    """I_hat = scale * mean(Z_i); SE = scale * s(Z)/sqrt(n).
-
-    Для интегралов: X,Y в [0,1], Z_i=1{Y_i<=f(X_i)}.
-    Для pi: X,Y в [-1,1], Z_i=1{X_i²+Y_i²<=1}.
-    Для среднего Z_i=f(X_i); при pi 4*mean(sqrt(1-X_i²))
-    оценивает площадь полного круга через длины вертикальных сечений.
-    Выборочная дисперсия вычисляется с ddof=1.
-    """
     start = perf_counter()
     is_pi = task.get('key') == 'pi'
     x = rng.random(n)
@@ -117,9 +81,7 @@ def estimate(task, method, n, rng, keep=False):
         result.update(x=x, y=y, observations=observations)
     return result
 
-
 def validate_implementation():
-    """Детерминированные проверки; статистические проверки — отдельно."""
     checks = []
     def check(name, condition):
         checks.append({'test': name, 'passed': bool(condition)})
@@ -141,12 +103,10 @@ def validate_implementation():
         check('Эталонная квадратура: ' + name, abs(value-target) < 1e-11)
     return checks
 
-
 def save_figure(fig, path):
     fig.tight_layout()
     fig.savefig(path, dpi=160, bbox_inches='tight')
     plt.close(fig)
-
 
 def geometry_plot(task, result, out, n_plot):
     count = min(n_plot, len(result['x']))
@@ -173,7 +133,6 @@ def geometry_plot(task, result, out, n_plot):
     ax.legend(loc='lower left', fontsize=9)
     save_figure(fig, out / f"01_geometry_{task['key']}.png")
 
-
 def convergence_plot(task, trajectories, out):
     fig, ax = plt.subplots(figsize=(8, 5))
     for method, r in trajectories.items():
@@ -191,7 +150,6 @@ def convergence_plot(task, trajectories, out):
     ax.legend()
     ax.grid(alpha=.25)
     save_figure(fig, out / f"02_convergence_{task['key']}.png")
-
 
 def research_plot(task, rows, raw, out):
     # Каждая диагностика сохраняется отдельно: один график на PNG-файл.
@@ -320,54 +278,10 @@ def main():
     save_csv(out/'research.csv', research)
     save_csv(out/'trials.csv', trials)
     coverage_noise = math.sqrt(.95*.05/args.repeats)
-    report = [
-        '# Лабораторная работа: метод Монте-Карло',
-        '', '## Цель и постановка',
-        'Оценить π и четыре интеграла на [0,1], сравнить методы попаданий и среднего, исследовать сходимость и калибровку интервалов.',
-        f'Параметры: seed={args.seed}, N={args.n}, независимых повторов на каждое N: {args.repeats}; сетка N={ns.tolist()}.',
-        '', '## Модель и формулы',
-        'Для интегралов X и Y равномерны на [0,1]. Для попаданий Z=1{Y<=f(X)}, для среднего Z=f(X). Оценка: scale*mean(Z).',
-        'Для π X и Y равномерны на [-1,1]: полный единичный круг расположен в квадрате площади 4. Для попаданий Z=1{X²+Y²<=1}, оценка π=4*mean(Z).',
-        'Для метода среднего при оценке π используется длина вертикального сечения круга: π_hat=4*mean(sqrt(1-X²)), X равномерен на [-1,1]. Для остальных задач scale=1.',
-        'SE=scale*s(Z)/sqrt(N), выборочная дисперсия с ddof=1. Интервал: оценка ± 1.96*SE (приближенный).',
-        'RMSE=sqrt(mean((оценка−эталон)²)); bias=mean(оценка−эталон). Теоретический ориентир RMSE: C/sqrt(N).',
-        'Дисперсии: scale²*p*(1−p)/N для попаданий и scale²*(E[f(X)²]−E[f(X)]²)/N для среднего.',
-        'Источники методики: Physically Based Rendering, 4th ed., Monte Carlo Basics; University of Colorado, Lesson 6: Monte Carlo Integration.',
-        '', '## Эталон',
-        'Для π — math.pi. Для интегралов — численная квадратура scipy.integrate.quad с допусками 1e-12.',
-        'Это численный эталон, а не точное символическое значение. Оценки его погрешности сохранены в summary.csv.',
-        'Источник: документация SciPy, scipy.integrate.quad.',
-        '', '## Валидация реализации и статистической модели',
-        f'Детерминированных тестов пройдено: {len(checks)} из {len(checks)}. Подробности: validation.csv.',
-        'Проверены значения функций в нуле, массивы с нулем, интеграл константы, воспроизводимость и квадратура на x и x².',
-        'Статистическая валидация: сопоставление экспериментального SD с теоретическим, доля покрытия интервалов, распределение стандартизованных ошибок.',
-        'Точки одной траектории коррелированы: она служит иллюстрацией, а выводы о сходимости делаются по независимым повторам.',
-        f'При идеальном покрытии 0.95 ориентировочный SD доли покрытия при данном числе повторов: {coverage_noise:.4f}.',
-        'Это характеристика случайного шума оценки покрытия, не доверительный интервал и не автоматический критерий приемки.',
-        '', '## Полученные результаты',
-    ]
     for r in summary:
         report.append(f"- {r['task']}, {LABELS[r['method']]}: {r['estimate']:.9f}; "
                       f"эталон {r['reference']:.9f}; |ошибка|={r['absolute_error']:.4g}; "
                       f"95% ДИ [{r['ci_low']:.9f}, {r['ci_high']:.9f}].")
-    report += ['', '## Исследование сходимости и эффективности', *conclusions,
-        '', '## Интерпретация и ограничения',
-        'Сравнивайте экспериментальный наклон с −0.5; конечное число повторов приводит к колебаниям наклона и RMSE.',
-        'Одна реализация не обязана становиться точнее при каждом увеличении N. Попадание эталона в каждый интервал также не требуется.',
-        'Интервалы на графике траектории — поточечные, а не одновременная полоса для всей кривой.',
-        'Равный N означает одинаковое число вычислений f, но метод попаданий генерирует дополнительно N ординат Y.',
-        'Время измерено без графиков и сохранения файлов; оно включает генерацию, проверку массива, вычисление оценки и SE. Разогрев и аппаратные условия отдельно не контролируются.',
-        'Вырожденный интервал для постоянной функции не доказывает корректность интервалов для других функций; для этого выполнены независимые повторы.',
-        'Формальные тесты нормальности не выполняются: гистограмма является диагностикой, а не доказательством нормальности.',
-        '', '## Файлы',
-        '- summary.csv: основной расчет, ошибки, интервалы и время.',
-        '- research.csv: агрегаты независимых повторов для каждого N.',
-        '- trials.csv: исходные результаты всех повторов.',
-        '- validation.csv: детерминированные тесты.',
-        '- 01_geometry_*.png: геометрия попаданий; для π показан полный круг.',
-        '- 02_convergence_*.png: траектории оценок.',
-        '- 03_rmse_*.png: RMSE; 04_coverage_*.png: покрытие; 05_errors_*.png: распределения. В каждом PNG один график.',
-    ]
     (out/'report.md').write_text('\n'.join(report), encoding='utf-8')
     print('\n'.join(report))
     print(f'\nРезультаты: {out.resolve()}')
@@ -383,7 +297,6 @@ def main():
             plt.show()
         except (ImportError, RuntimeError) as exc:
             print(f'Окна недоступны ({exc}); сохраненные PNG можно открыть вручную.')
-
 
 if __name__ == '__main__':
     main()
