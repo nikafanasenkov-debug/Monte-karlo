@@ -32,6 +32,10 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+# Включаем классический научный шрифт для формул
+plt.rcParams['mathtext.fontset'] = 'cm' 
+
 from scipy.integrate import quad
 from scipy.stats import norm
 
@@ -57,11 +61,11 @@ def log_ratio(x):
 def tasks():
     return [
         dict(key='pi', title='Число π', f=lambda x: np.sqrt(1-x*x), scale=4., ref=math.pi, quad_err=0.),
-        # ИСПРАВЛЕНО: используем знаки доллара для формул
-        dict(key='gauss', title=r'$\int_0^1 e^{-x^2} dx$', f=lambda x: np.exp(-x*x), scale=1.),
-        dict(key='sinc', title=r'$\int_0^1 \frac{\sin(x)}{x} dx$', f=sinc_unscaled, scale=1.),
-        dict(key='log', title=r'$\int_0^1 \frac{\ln(1+x)}{x} dx$', f=log_ratio, scale=1.),
-        dict(key='cos', title=r'$\int_0^1 \cos(x^2) dx$', f=lambda x: np.cos(x*x), scale=1.),
+        # ИСПРАВЛЕНО: \; добавляет отступ после интеграла, \, добавляет отступ перед dx
+        dict(key='gauss', title=r'$\underset{0}{\overset{1}{\int}}\; e^{-x^2} \, dx$', f=lambda x: np.exp(-x*x), scale=1.),
+        dict(key='sinc', title=r'$\underset{0}{\overset{1}{\int}}\; \frac{\sin(x)}{x} \, dx$', f=sinc_unscaled, scale=1.),
+        dict(key='log', title=r'$\underset{0}{\overset{1}{\int}}\; \frac{\ln(1+x)}{x} \, dx$', f=log_ratio, scale=1.),
+        dict(key='cos', title=r'$\underset{0}{\overset{1}{\int}}\; \cos(x^2) \, dx$', f=lambda x: np.cos(x*x), scale=1.),
     ]
 
 
@@ -207,7 +211,7 @@ def research_plot(task, rows, raw, out):
         errs = np.array([v['estimate']-task['ref'] for v in vals])
         zz = errs[se>0]/se[se>0]
         ax_errors.hist(zz, bins=12, density=True, alpha=.4, color=color, label=LABELS[method])
-    # ИСПРАВЛЕНО: степень N записана через формулу
+    
     ax_rmse.set(xlabel='N', ylabel='RMSE', title=task['title'] + '\nСходимость; пунктир: $N^{-1/2}$')
     ax_coverage.axhline(.95, ls='--', color='black')
     ax_coverage.set(xlabel='N', ylabel='Доля покрытия', ylim=(0,1.02),
